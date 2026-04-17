@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NFA to DFA | Sai Naveen</title>
+<link href="https://fonts.googleapis.com/css2?family=Cutive+Mono&family=Black+Ops+One&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0e1116;color:#cdd9e5;font-family:'Cutive Mono',monospace;min-height:100vh}
+header{background:#161b22;border-bottom:2px solid #f0883e;padding:16px 28px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-family:'Black Ops One',sans-serif;font-size:1.2rem;color:#f0883e;letter-spacing:2px}
+header span{font-size:.7rem;color:#484f58}
+.wrap{max-width:980px;margin:26px auto;padding:0 18px}
+.box{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:22px;margin-bottom:18px}
+.box h3{font-family:'Black Ops One',sans-serif;font-size:.85rem;color:#f0883e;margin-bottom:14px;letter-spacing:1.5px}
+label{font-size:.68rem;color:#8b949e;display:block;margin-bottom:4px;letter-spacing:.8px;text-transform:uppercase}
+input,textarea{width:100%;background:#0e1116;border:1px solid #30363d;color:#f0883e;padding:9px 13px;border-radius:5px;font-family:'Cutive Mono',monospace;font-size:.85rem;outline:none;resize:vertical}
+input:focus,textarea:focus{border-color:#f0883e;box-shadow:0 0 8px rgba(240,136,62,.2)}
+textarea{min-height:100px}
+.btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+button{padding:8px 18px;border:none;border-radius:6px;font-family:'Cutive Mono',monospace;font-size:.78rem;cursor:pointer;transition:all .2s}
+.bp{background:#f0883e;color:#0e1116;font-weight:700}
+.bp:hover{background:#d4722e;box-shadow:0 0 14px rgba(240,136,62,.4)}
+.bs{background:#21262d;color:#8b949e;border:1px solid #30363d}
+.bs:hover{border-color:#f0883e;color:#f0883e}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{background:#0e1116;color:#f0883e;padding:8px 12px;text-align:left;border-bottom:2px solid #30363d}
+td{padding:7px 12px;border-bottom:1px solid #21262d;color:#cdd9e5}
+.final-state{color:#7ee787;font-weight:700}
+.start-state{color:#79c0ff}
+.dead{color:#484f58;font-style:italic}
+.err{color:#f85149;font-size:.76rem;margin-top:6px}
+.info{font-size:.7rem;color:#484f58;margin-top:8px;line-height:1.6}
+footer{text-align:center;padding:16px;color:#21262d;font-size:.68rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>NFA → DFA CONVERTER</h1>
+  <span>Sai Naveen | RA2311003050059</span>
+</header>
+<div class="wrap">
+  <div class="box">
+    <h3>NFA Definition</h3>
+    <div class="form-row">
+      <div><label>States (comma separated)</label><input id="states" value="q0,q1,q2"/></div>
+      <div><label>Alphabet (comma separated)</label><input id="alpha" value="a,b"/></div>
+    </div>
+    <div class="form-row">
+      <div><label>Start State</label><input id="start" value="q0"/></div>
+      <div><label>Final States (comma separated)</label><input id="finals" value="q2"/></div>
+    </div>
+    <label>Transition Function (format: state,symbol,next1 next2; one per line; use ε for epsilon)</label>
+    <textarea id="trans">q0,a,q0 q1
+q0,b,q0
+q1,b,q2</textarea>
+    <div class="btns">
+      <button class="bp" onclick="convert()">⚙ CONVERT</button>
+      <button class="bs" onclick="clr()">✕ CLEAR</button>
+    </div>
+    <div class="info">Example: q0,a,q0 q1 means δ(q0,a) = {q0,q1}</div>
+    <div id="err" class="err"></div>
+  </div>
+  <div class="box" id="nfaBox" style="display:none">
+    <h3>NFA Transition Table</h3>
+    <div id="nfaTable"></div>
+  </div>
+  <div class="box" id="dfaBox" style="display:none">
+    <h3>DFA Transition Table (Subset Construction)</h3>
+    <div id="dfaTable"></div>
+  </div>
+  <div class="box" id="sumBox" style="display:none">
+    <h3>Summary</h3>
+    <div id="summary"></div>
+  </div>
+</div>
+<footer>COMPILER DESIGN LAB | SAI NAVEEN | RA2311003050059</footer>
+<script>
+function convert(){
+  document.getElementById('err').textContent='';
+  try{
+    const states=document.getElementById('states').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const alpha=document.getElementById('alpha').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const start=document.getElementById('start').value.trim();
+    const finals=new Set(document.getElementById('finals').value.split(',').map(s=>s.trim()).filter(Boolean));
+    // parse transitions
+    const nfaTrans={};
+    states.forEach(s=>{nfaTrans[s]={};alpha.forEach(a=>nfaTrans[s][a]=new Set());nfaTrans[s]['ε']=new Set();});
+    document.getElementById('trans').value.trim().split('\n').forEach(line=>{
+      line=line.trim();if(!line)return;
+      const parts=line.split(',');
+      if(parts.length<3)return;
+      const[st,sym,...rest]=parts;
+      const nexts=rest.join(',').trim().split(/\s+/).filter(Boolean);
+      if(!nfaTrans[st])nfaTrans[st]={};
+      if(!nfaTrans[st][sym])nfaTrans[st][sym]=new Set();
+      nexts.forEach(n=>nfaTrans[st][sym].add(n));
+    });
+    // render NFA table
+    let nh=`<table><thead><tr><th>State</th>`;
+    alpha.forEach(a=>nh+=`<th>δ(·,${a})</th>`);
+    nh+='</tr></thead><tbody>';
+    states.forEach(s=>{
+      const isF=finals.has(s),isS=s===start;
+      const lbl=(isS?'→':' ')+(isF?'*':' ')+s;
+      nh+=`<tr><td class="${isF?'final-state':isS?'start-state':''}">${lbl}</td>`;
+      alpha.forEach(a=>{
+        const ns=[...(nfaTrans[s]&&nfaTrans[s][a]?nfaTrans[s][a]:new Set())];
+        nh+=`<td>{${ns.join(',')||'∅'}}</td>`;
+      });
+      nh+='</tr>';
+    });
+    document.getElementById('nfaTable').innerHTML=nh+'</tbody></table>';
+
+    // subset construction (no epsilon)
+    const dfaStates=[],dfaTrans={},dfaFinals=new Set();
+    const startSet=new Set([start]);
+    const queue=[startSet];
+    const setKey=s=>[...s].sort().join(',');
+    dfaStates.push(startSet);
+    while(queue.length){
+      const cur=queue.shift();
+      const ck=setKey(cur);
+      dfaTrans[ck]={};
+      alpha.forEach(sym=>{
+        const next=new Set();
+        cur.forEach(st=>{
+          (nfaTrans[st]&&nfaTrans[st][sym]?[...nfaTrans[st][sym]]:[]).forEach(n=>next.add(n));
+        });
+        const nk=setKey(next);
+        dfaTrans[ck][sym]=next;
+        if(next.size>0&&!dfaStates.some(s=>setKey(s)===nk)){dfaStates.push(next);queue.push(next);}
+      });
+      if([...cur].some(s=>finals.has(s)))dfaFinals.add(ck);
+    }
+    // render DFA
+    let dh=`<table><thead><tr><th>DFA State</th>`;
+    alpha.forEach(a=>dh+=`<th>δ(·,${a})</th>`);
+    dh+='</tr></thead><tbody>';
+    dfaStates.forEach((ss,i)=>{
+      const ck=setKey(ss);
+      const isF=dfaFinals.has(ck),isS=i===0;
+      const lbl=(isS?'→':' ')+(isF?'*':' ')+'{'+ck+'}';
+      dh+=`<tr><td class="${isF?'final-state':isS?'start-state':''}">${lbl}</td>`;
+      alpha.forEach(sym=>{
+        const ns=dfaTrans[ck][sym];
+        const nk=ns&&ns.size>0?'{'+setKey(ns)+'}':`{∅}`;
+        dh+=`<td class="${ns&&ns.size===0?'dead':''}">${nk}</td>`;
+      });
+      dh+='</tr>';
+    });
+    document.getElementById('dfaTable').innerHTML=dh+'</tbody></table>';
+    const sum=`NFA States    : ${states.length}\nDFA States    : ${dfaStates.length}\nDFA Finals    : {${[...dfaFinals].map(k=>'{'+k+'}').join(', ')}}\nAlphabet      : {${alpha.join(', ')}}`;
+    document.getElementById('summary').innerHTML=`<pre style="color:#7ee787;font-size:.82rem;line-height:1.8">${sum}</pre>`;
+    ['nfaBox','dfaBox','sumBox'].forEach(id=>document.getElementById(id).style.display='block');
+  }catch(e){document.getElementById('err').textContent='Error: '+e.message;console.error(e);}
+}
+function clr(){
+  ['states','alpha','start','finals','trans'].forEach(id=>document.getElementById(id).value='');
+  ['nfaBox','dfaBox','sumBox'].forEach(id=>document.getElementById(id).style.display='none');
+}
+convert();
+</script>
+</body>
+</html>
